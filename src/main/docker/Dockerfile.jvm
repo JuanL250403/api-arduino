@@ -1,24 +1,26 @@
-# ---- Etapa 1: Compilación ----
-FROM maven:3.9.6-eclipse-temurin-21 AS build
-WORKDIR /code
 
-# 1. Copiar el archivo POM primero para aprovechar la caché de capas de Docker
-COPY pom.xml /code/
+# Etapa 1: compilar la aplicación Quarkus
+FROM maven:3.9-eclipse-temurin-21 AS build
 
-# 2. Copiar todo el código fuente del proyecto
-COPY src /code/src
+WORKDIR /build
 
-# 3. Compilar usando 'mvn' directamente en lugar del wrapper local
+COPY pom.xml .
+COPY src ./src
+
 RUN mvn package -DskipTests
 
-# ---- Etapa 2: Imagen de ejecución ligera ----
-FROM eclipse-temurin:21-jre-jammy
-WORKDIR /application
+# Etapa 2: ejecutar la aplicación
+FROM eclipse-temurin:21-jre
 
-# Copiar los artefactos generados de Quarkus desde la etapa previa
-COPY --from=build /code/target/quarkus-app/ /application/
+WORKDIR /work
 
-EXPOSE 8080
-ENV JAVA_OPTS="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+COPY --from=build /build/target/quarkus-app/lib/ ./lib/
+COPY --from=build /build/target/quarkus-app/*.jar ./
+COPY --from=build /build/target/quarkus-app/app/ ./app/
+COPY --from=build /build/target/quarkus-app/quarkus/ ./quarkus/
 
-CMD ["java", "-jar", "quarkus-run.jar"]
+ENV QUARKUS_HTTP_HOST=0.0.0.0
+
+EXPOSE 10000
+
+CMD ["sh", "-c", "java -Dquarkus.http.host=0.0.0.0 -Dquarkus.http.port=${PORT:-10000} -jar /work/quarkus-run.jar"]
