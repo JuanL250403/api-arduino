@@ -1,27 +1,26 @@
+# ---- Etapa 1: Compilación ----
+FROM maven:3.9.6-eclipse-temurin-21 AS build
+WORKDIR /code
 
-FROM maven:3.9-eclipse-temurin-21 AS build
+# Copiar el archivo de configuración de dependencias
+COPY pom.xml /code/
 
-WORKDIR /workspace
+# Copiar el código fuente de tu API Quarkus
+COPY src /code/src
 
-COPY pom.xml .
-COPY src ./src
-
+# Compilar la aplicación omitiendo los tests para acelerar el despliegue
 RUN mvn package -DskipTests
 
-FROM registry.access.redhat.com/ubi9/openjdk-21-runtime:1.24
+# ---- Etapa 2: Imagen de ejecución (Ligera) ----
+FROM eclipse-temurin:21-jre-jammy
+WORKDIR /application
 
-WORKDIR /deployments
+# Copiar los artefactos generados en la etapa de compilación
+COPY --from=build /code/target/quarkus-app/ /application/
 
-COPY --from=build --chown=185 /workspace/target/quarkus-app/lib/ ./lib/
-COPY --from=build --chown=185 /workspace/target/quarkus-app/*.jar ./
-COPY --from=build --chown=185 /workspace/target/quarkus-app/app/ ./app/
-COPY --from=build --chown=185 /workspace/target/quarkus-app/quarkus/ ./quarkus/
-
-ENV PORT=8080
-ENV JAVA_OPTS_APPEND="-Dquarkus.http.host=0.0.0.0 -Dquarkus.http.port=10000"
-
+# Exponer el port estándar de Quarkus
 EXPOSE 8080
+ENV JAVA_OPTS="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
 
-USER 185
-
-ENTRYPOINT ["java", "-jar", "quarkus-run.jar"]
+# Comando de arranque de la aplicación
+CMD ["java", "-jar", "quarkus-run.jar"]
