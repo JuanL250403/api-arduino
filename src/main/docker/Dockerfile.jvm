@@ -2,25 +2,23 @@
 FROM maven:3.9.6-eclipse-temurin-21 AS build
 WORKDIR /code
 
-# Copiar el archivo de configuración de dependencias
+# 1. Copiar el archivo POM primero para aprovechar la caché de capas de Docker
 COPY pom.xml /code/
 
-# Copiar el código fuente de tu API Quarkus
+# 2. Copiar todo el código fuente del proyecto
 COPY src /code/src
 
-# Compilar la aplicación omitiendo los tests para acelerar el despliegue
+# 3. Compilar usando 'mvn' directamente en lugar del wrapper local
 RUN mvn package -DskipTests
 
-# ---- Etapa 2: Imagen de ejecución (Ligera) ----
+# ---- Etapa 2: Imagen de ejecución ligera ----
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /application
 
-# Copiar los artefactos generados en la etapa de compilación
+# Copiar los artefactos generados de Quarkus desde la etapa previa
 COPY --from=build /code/target/quarkus-app/ /application/
 
-# Exponer el port estándar de Quarkus
 EXPOSE 8080
 ENV JAVA_OPTS="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
 
-# Comando de arranque de la aplicación
 CMD ["java", "-jar", "quarkus-run.jar"]
